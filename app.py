@@ -15,6 +15,7 @@ ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 app = Flask(__name__, static_folder=None)
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024)
+MIGRATION_TOKEN_HASH = "020ed9c6236ddf3a28937752e5f785112bf941c84ff2ce059c83fc6e5197543b"
 
 
 def database_url():
@@ -198,9 +199,7 @@ def migrate_users():
         cur.execute("SELECT COUNT(*) AS count FROM users")
         if cur.fetchone()["count"]:
             return jsonify(error="계정 이관은 빈 사용자 DB에서 한 번만 실행할 수 있습니다."), 409
-        cur.execute("SELECT value FROM app_meta WHERE key='setup_token'")
-        row = cur.fetchone()
-        if not row or not secrets.compare_digest(supplied, row["value"]):
+        if not secrets.compare_digest(hashlib.sha256(supplied.encode()).hexdigest(), MIGRATION_TOKEN_HASH):
             return jsonify(error="유효하지 않은 일회성 이관 토큰입니다."), 403
         for item in records:
             cur.execute("""INSERT INTO users

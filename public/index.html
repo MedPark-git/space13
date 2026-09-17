@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>인재확보 및 인사기획</title>
+  <link rel="stylesheet" href="/hr-maps-operations-v10-20260911a.css">
+</head>
+<body>
+  <main id="boot-view" class="boot-view">
+    <section class="boot-card">
+      <div class="boot-mark">인</div>
+      <strong>인재확보 및 인사기획</strong>
+      <span>채용활동 현황을 불러오는 중입니다.</span>
+      <i aria-hidden="true"></i>
+    </section>
+  </main>
+
+  <main id="auth-view" class="auth-view" hidden>
+    <section class="auth-intro" aria-label="사이트 소개">
+      <div class="auth-brand"><span>인</span><div><strong>인재확보 및 인사기획</strong><small>MEDPARK HR OPERATIONS</small></div></div>
+      <div class="auth-intro-copy">
+        <p class="eyebrow">ONE VIEW, BETTER HIRING</p>
+        <h1>인재확보의 모든 흐름을<br>한 곳에서 관리합니다.</h1>
+        <p>채용 목표부터 일일 활동, 면접 일정과 후보자 진행 상황까지 연결해 더 빠르고 정확한 인사 의사결정을 지원합니다.</p>
+        <ul>
+          <li><i>01</i><span><strong>통합 현황</strong>채용 목표와 진행률을 한눈에 확인</span></li>
+          <li><i>02</i><span><strong>활동 관리</strong>담당자별 채용 활동과 후속 조치 기록</span></li>
+          <li><i>03</i><span><strong>안전한 접근</strong>등록된 사용자만 내부 데이터 이용</span></li>
+        </ul>
+      </div>
+      <small class="auth-intro-foot">MEDPARK · Human Resources</small>
+    </section>
+    <section class="auth-card">
+      <div id="login-panel">
+        <p class="eyebrow">AUTHORIZED ACCESS</p>
+        <h1>환영합니다.</h1>
+        <p class="auth-copy">계속하려면 등록된 계정으로 로그인해 주세요.</p>
+        <form id="login-form" class="auth-form">
+          <label><span>아이디</span><input name="username" autocomplete="username" required placeholder="사용자 아이디"></label>
+          <label><span>비밀번호</span><input name="password" type="password" autocomplete="current-password" required placeholder="비밀번호"></label>
+          <button type="submit">로그인</button>
+        </form>
+        <button id="continue-public" type="button" hidden aria-hidden="true" tabindex="-1"></button>
+      </div>
+      <div id="setup-panel" hidden>
+        <p class="eyebrow">ONE-TIME ADMIN SETUP</p>
+        <h1>관리자 계정을<br>처음 설정합니다.</h1>
+        <p class="auth-copy">관리자 아이디는 <b>admin</b>으로 생성됩니다. 이 링크는 설정 완료 후 사용할 수 없습니다.</p>
+        <form id="setup-form" class="auth-form">
+          <label><span>관리자 표시 이름</span><input name="displayName" required value="관리자" maxlength="80"></label>
+          <label><span>소속 부서</span><input name="department" value="인사" maxlength="80"></label>
+          <label><span>관리자 이메일</span><input name="email" type="email" autocomplete="email" placeholder="선택 입력"></label>
+          <label><span>새 비밀번호</span><input name="password" type="password" autocomplete="new-password" minlength="10" required placeholder="영문·숫자 포함 10자 이상"></label>
+          <label><span>비밀번호 확인</span><input name="passwordConfirm" type="password" autocomplete="new-password" minlength="10" required placeholder="한 번 더 입력"></label>
+          <button type="submit">admin 계정 생성</button>
+        </form>
+      </div>
+      <div id="auth-error" class="auth-error" hidden></div>
+      <small class="auth-foot">본 시스템은 승인된 사용자만 이용할 수 있습니다.</small>
+    </section>
+  </main>
+
+  <div id="app-view" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand"><span>인</span><div><strong>인재확보 및 인사기획</strong></div></div>
+      <nav id="nav-list" aria-label="주요 메뉴">
+        <button data-view="dashboard" class="active"><i>⌂</i><span>통합 현황</span></button>
+        <button data-view="activities"><i>＋</i><span>일일 활동</span></button>
+        <button data-view="goals"><i>◎</i><span>채용 목표</span></button>
+        <button data-view="postings"><i>▧</i><span>채용 공고</span></button>
+        <button data-view="calendar"><i>▦</i><span>면접 일정</span></button>
+        <button data-view="meetings"><i>☑</i><span>HR 회의</span></button>
+        <button data-view="talent"><i>◇</i><span>과거 인재풀</span></button>
+        <button data-view="reports"><i>▤</i><span>HR 보고</span></button>
+        <button data-view="users" id="users-nav"><i>⚙</i><span>사용자 관리</span></button>
+      </nav>
+      <div class="sidebar-focus">
+        <span>조회 기간</span>
+        <strong id="sidebar-period">2026.08</strong>
+        <small id="sidebar-summary">활동 데이터를 불러오는 중</small>
+      </div>
+      <div class="profile"><span id="profile-initials">공</span><div><strong id="profile-name">공개 조회</strong><small id="profile-role">읽기 전용</small></div><button id="logout-button" title="로그인">⇥</button></div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="mobile-brand">인재확보 및 인사기획</div>
+        <div class="period-control">
+          <label><span>시작</span><input id="period-from" type="date"></label>
+          <label><span>종료</span><input id="period-to" type="date"></label>
+          <button id="apply-period" class="icon-button" title="기간 적용">조회</button>
+          <div class="quick-periods"><button data-period="week">이번주</button><button data-period="month">이번달</button><button data-period="august">8월</button></div>
+        </div>
+        <div id="candidate-global-search" class="candidate-global-search" hidden>
+          <label for="candidate-global-search-input">후보자 통합검색</label>
+          <input id="candidate-global-search-input" type="search" autocomplete="off" placeholder="이름·포지션·상태 검색">
+          <div id="candidate-global-search-results" class="candidate-global-search-results" hidden></div>
+        </div>
+        <div class="top-actions">
+          <span id="access-badge" class="access-badge public">공개 조회</span>
+          <button id="refresh-button" class="round-button" title="새로고침">↻</button>
+          <button id="session-button" class="session-button">로그인</button>
+        </div>
+      </header>
+      <div id="global-error" class="global-error" hidden></div>
+      <section id="content" class="content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <form id="modal-form" class="modal">
+      <header><div><small id="modal-eyebrow">입력</small><h2 id="modal-title">등록</h2></div><button id="modal-close" type="button" aria-label="닫기">×</button></header>
+      <div id="modal-body" class="form-grid"></div>
+      <footer><button type="button" id="modal-cancel" class="button secondary">취소</button><button type="submit" id="modal-submit" class="button primary">저장</button></footer>
+    </form>
+  </div>
+
+  <div id="candidate-drawer-backdrop" class="candidate-drawer-backdrop" hidden>
+    <aside class="candidate-drawer" role="dialog" aria-modal="true" aria-labelledby="candidate-drawer-title">
+      <header><div><small>HR CANDIDATE HISTORY</small><h2 id="candidate-drawer-title">후보자 진행 내역</h2></div><button id="candidate-drawer-close" type="button" aria-label="닫기">×</button></header>
+      <div id="candidate-drawer-body" class="candidate-drawer-body"></div>
+    </aside>
+  </div>
+
+  <div id="busy" class="busy" hidden><i></i> 처리 중</div>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="/hr-maps-operations-v10-20260911a.js"></script>
+</body>
+</html>

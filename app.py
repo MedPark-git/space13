@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -41,7 +42,9 @@ def init_db():
               department TEXT,
               role TEXT NOT NULL DEFAULT 'admin',
               password_hash TEXT NOT NULL,
+              password_salt TEXT,
               active BOOLEAN NOT NULL DEFAULT TRUE,
+              must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
             CREATE TABLE IF NOT EXISTS sessions (
@@ -63,6 +66,8 @@ def init_db():
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
         """)
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE")
         cur.execute("SELECT value FROM app_meta WHERE key='setup_token'")
         if not cur.fetchone():
             token = os.getenv("SETUP_TOKEN") or secrets.token_urlsafe(24)
@@ -79,7 +84,8 @@ def actor():
     if not token:
         return None
     with db() as conn, conn.cursor() as cur:
-        cur.execute("""SELECT u.username,u.display_name AS name,u.email,u.department,u.role
+        cur.execute("""SELECT u.username,u.display_name AS name,u.email,u.department,u.role,
+                              u.must_change_password AS "mustChangePassword"
                        FROM sessions s JOIN users u ON u.username=s.username
                        WHERE s.token_hash=%s AND s.expires_at>NOW() AND u.active=TRUE""", (token_hash(token),))
         return cur.fetchone()
@@ -90,6 +96,16 @@ def require_actor():
     if not user:
         return None, (jsonify(error="로그인이 필요합니다."), 401)
     return user, None
+
+
+def password_matches(user, password):
+    salt = user.get("password_salt")
+    if salt:
+        actual = hashlib.scrypt(
+            password.encode(), salt=salt.encode(), n=2**14, r=8, p=1, dklen=64
+        ).hex()
+        return hmac.compare_digest(actual, user["password_hash"])
+    return check_password_hash(user["password_hash"], password)
 
 
 def empty_hr(user):
@@ -161,7 +177,7 @@ def login():
     with db() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM users WHERE username=%s AND active=TRUE", (username,))
         user = cur.fetchone()
-        if not user or not check_password_hash(user["password_hash"], str(body.get("password", ""))):
+        if not user or not password_matches(user, str(body.get("password", ""))):
             return jsonify(error="아이디 또는 비밀번호를 확인하세요."), 401
         token = secrets.token_urlsafe(32)
         cur.execute("INSERT INTO sessions(token_hash,username,expires_at) VALUES(%s,%s,%s)",
@@ -169,6 +185,35 @@ def login():
     response = jsonify(ok=True, actor={"username": username, "name": user["display_name"], "role": user["role"]})
     response.set_cookie("hr_session", token, max_age=43200, secure=True, httponly=True, samesite="Strict")
     return response
+
+
+@app.post("/api/internal/migrate-users")
+def migrate_users():
+    body = request.get_json(silent=True) or {}
+    supplied = str(body.get("setupToken", ""))
+    records = body.get("users")
+    if not isinstance(records, list) or not records:
+        return jsonify(error="이관할 계정이 없습니다."), 400
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS count FROM users")
+        if cur.fetchone()["count"]:
+            return jsonify(error="계정 이관은 빈 사용자 DB에서 한 번만 실행할 수 있습니다."), 409
+        cur.execute("SELECT value FROM app_meta WHERE key='setup_token'")
+        row = cur.fetchone()
+        if not row or not secrets.compare_digest(supplied, row["value"]):
+            return jsonify(error="유효하지 않은 일회성 이관 토큰입니다."), 403
+        for item in records:
+            cur.execute("""INSERT INTO users
+                (username,display_name,email,department,role,password_hash,password_salt,
+                 active,must_change_password,created_at)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", (
+                str(item["username"]).lower(), item["displayName"], item.get("email"),
+                item.get("department"), item["role"], item["passwordHash"],
+                item["passwordSalt"], bool(item.get("active", True)),
+                bool(item.get("mustChangePassword", False)), item.get("createdAt") or datetime.now(timezone.utc)
+            ))
+        cur.execute("DELETE FROM app_meta WHERE key='setup_token'")
+    return jsonify(ok=True, migrated=len(records)), 201
 
 
 @app.post("/api/logout")

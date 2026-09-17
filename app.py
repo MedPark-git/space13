@@ -15,7 +15,6 @@ ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 app = Flask(__name__, static_folder=None)
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024)
-MIGRATION_TOKEN_HASH = "020ed9c6236ddf3a28937752e5f785112bf941c84ff2ce059c83fc6e5197543b"
 
 
 def database_url():
@@ -186,33 +185,6 @@ def login():
     response = jsonify(ok=True, actor={"username": username, "name": user["display_name"], "role": user["role"]})
     response.set_cookie("hr_session", token, max_age=43200, secure=True, httponly=True, samesite="Strict")
     return response
-
-
-@app.post("/api/internal/migrate-users")
-def migrate_users():
-    body = request.get_json(silent=True) or {}
-    supplied = str(body.get("setupToken", ""))
-    records = body.get("users")
-    if not isinstance(records, list) or not records:
-        return jsonify(error="이관할 계정이 없습니다."), 400
-    with db() as conn, conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS count FROM users")
-        if cur.fetchone()["count"]:
-            return jsonify(error="계정 이관은 빈 사용자 DB에서 한 번만 실행할 수 있습니다."), 409
-        if not secrets.compare_digest(hashlib.sha256(supplied.encode()).hexdigest(), MIGRATION_TOKEN_HASH):
-            return jsonify(error="유효하지 않은 일회성 이관 토큰입니다."), 403
-        for item in records:
-            cur.execute("""INSERT INTO users
-                (username,display_name,email,department,role,password_hash,password_salt,
-                 active,must_change_password,created_at)
-                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", (
-                str(item["username"]).lower(), item["displayName"], item.get("email"),
-                item.get("department"), item["role"], item["passwordHash"],
-                item["passwordSalt"], bool(item.get("active", True)),
-                bool(item.get("mustChangePassword", False)), item.get("createdAt") or datetime.now(timezone.utc)
-            ))
-        cur.execute("DELETE FROM app_meta WHERE key='setup_token'")
-    return jsonify(ok=True, migrated=len(records)), 201
 
 
 @app.post("/api/logout")

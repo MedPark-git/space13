@@ -15,6 +15,7 @@ ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 app = Flask(__name__, static_folder=None)
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024)
+MIGRATION_TOKEN_HASH = "c4840a84b34fb8a251ebf324131d803bc43bc8bd4637d41ec82b104682cf60d5"
 
 
 def database_url():
@@ -108,19 +109,71 @@ def password_matches(user, password):
     return check_password_hash(user["password_hash"], password)
 
 
+def camel(name):
+    parts = name.split("_")
+    return parts[0] + "".join(part[:1].upper() + part[1:] for part in parts[1:])
+
+
+def decode_record(row):
+    value = dict(row["payload"])
+    for key in list(value):
+        if key.endswith("_json") and value[key]:
+            try:
+                value[camel(key[:-5])] = json.loads(value[key])
+            except (TypeError, ValueError):
+                pass
+    return {camel(key): val for key, val in value.items() if not key.endswith("_json")}
+
+
+def records_by_type(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT record_type,payload FROM hr_records ORDER BY record_type,id")
+        grouped = {}
+        for row in cur.fetchall():
+            grouped.setdefault(row["record_type"], []).append(decode_record(row))
+        return grouped
+
+
 def empty_hr(user):
     today = date.today().isoformat()
     start = request.args.get("from", today)
     end = request.args.get("to", today)
+    with db() as conn:
+        rows = records_by_type(conn)
+        with conn.cursor() as cur:
+            cur.execute("SELECT username,display_name AS \"displayName\",email,department,role,active,must_change_password AS \"mustChangePassword\" FROM users ORDER BY display_name")
+            users = cur.fetchall()
+    goals = [item.get("data") or item for item in rows.get("requisitions", [])]
+    candidates = {item.get("id"): item.get("data") or item for item in rows.get("candidates", [])}
+    applications = rows.get("applications", [])
+    interviews = rows.get("interviews", [])
+    interviews_by_app = {}
+    for item in interviews:
+        interviews_by_app.setdefault(item.get("applicationId"), []).append(item.get("data") or item)
+    pipeline = []
+    for row in applications:
+        app_data = row.get("data") or row
+        candidate = candidates.get(row.get("candidateId"), {})
+        pipeline.append({**candidate, **app_data, "candidateId": row.get("candidateId"), "applicationId": row.get("id"), "interviews": interviews_by_app.get(row.get("id"), [])})
+    activities = rows.get("recruiting_activities", [])
+    checkpoints = rows.get("goal_checkpoints", [])
+    snapshots = [item.get("summary") or item for item in rows.get("report_snapshots", [])]
+    postings = rows.get("job_postings", [])
+    workforce_plans = rows.get("workforce_plans", [])
+    meetings = rows.get("hr_meetings", [])
+    action_items = rows.get("action_items", [])
+    audit = rows.get("activity_logs", [])[-40:][::-1]
     return {
         "actor": user, "access": "registered", "today": today,
         "period": {"from": start, "to": end},
-        "report": {"totals": {}, "executive": {}}, "goals": [],
-        "recruitingActivities": [], "checkpoints": [], "snapshots": [],
-        "recentAudit": [], "users": [], "assignees": [], "jobPostings": [],
+        "report": {"totals": {}, "executive": {}}, "goals": goals,
+        "recruitingActivities": activities, "checkpoints": checkpoints, "snapshots": snapshots,
+        "recentAudit": audit, "users": users if user.get("role") == "admin" else [],
+        "assignees": [{"username": u["username"], "displayName": u["displayName"], "department": u["department"]} for u in users if u["active"]],
+        "jobPostings": postings,
         "saramin": {"connected": bool(os.getenv("SARAMIN_ACCESS_KEY"))},
-        "candidatePipeline": [], "candidateSummary": {}, "workforcePlans": [],
-        "workforce": {}, "meetings": [], "actionItems": [], "myWork": None,
+        "candidatePipeline": pipeline, "candidateSummary": {"total": len(pipeline)}, "workforcePlans": workforce_plans,
+        "workforce": {}, "meetings": meetings, "actionItems": action_items, "myWork": None,
         "legacy": {}
     }
 
@@ -196,6 +249,26 @@ def logout():
     response = jsonify(ok=True)
     response.delete_cookie("hr_session")
     return response
+
+
+@app.post("/api/internal/migrate-records")
+def migrate_records():
+    body = request.get_json(silent=True) or {}
+    supplied = str(body.get("migrationToken", ""))
+    if not secrets.compare_digest(hashlib.sha256(supplied.encode()).hexdigest(), MIGRATION_TOKEN_HASH):
+        return jsonify(error="유효하지 않은 이관 토큰입니다."), 403
+    records = body.get("records")
+    if not isinstance(records, list):
+        return jsonify(error="레코드 형식이 올바르지 않습니다."), 400
+    with db() as conn, conn.cursor() as cur:
+        for item in records:
+            record_type = str(item["recordType"])
+            record_id = str(item["id"])
+            cur.execute("""INSERT INTO hr_records(id,record_type,payload,updated_at)
+                           VALUES(%s,%s,%s::jsonb,NOW())
+                           ON CONFLICT(id) DO UPDATE SET record_type=excluded.record_type,payload=excluded.payload,updated_at=NOW()""",
+                        (f"{record_type}:{record_id}", record_type, json.dumps(item["payload"], ensure_ascii=False)))
+    return jsonify(ok=True, migrated=len(records)), 201
 
 
 @app.get("/api/me")

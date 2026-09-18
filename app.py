@@ -15,7 +15,6 @@ ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 app = Flask(__name__, static_folder=None)
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024)
-MIGRATION_TOKEN_HASH = "e8b243fc96410e7a20cdc63967c7224b93ca9d41bc3040425684c8fcacfdbc23"
 
 
 def database_url():
@@ -249,26 +248,6 @@ def logout():
     response = jsonify(ok=True)
     response.delete_cookie("hr_session")
     return response
-
-
-@app.post("/api/internal/migrate-records")
-def migrate_records():
-    body = request.get_json(silent=True) or {}
-    supplied = str(body.get("migrationToken", ""))
-    if not secrets.compare_digest(hashlib.sha256(supplied.encode()).hexdigest(), MIGRATION_TOKEN_HASH):
-        return jsonify(error="유효하지 않은 이관 토큰입니다."), 403
-    records = body.get("records")
-    if not isinstance(records, list):
-        return jsonify(error="레코드 형식이 올바르지 않습니다."), 400
-    with db() as conn, conn.cursor() as cur:
-        for item in records:
-            record_type = str(item["recordType"])
-            record_id = str(item["id"])
-            cur.execute("""INSERT INTO hr_records(id,record_type,payload,updated_at)
-                           VALUES(%s,%s,%s::jsonb,NOW())
-                           ON CONFLICT(id) DO UPDATE SET record_type=excluded.record_type,payload=excluded.payload,updated_at=NOW()""",
-                        (f"{record_type}:{record_id}", record_type, json.dumps(item["payload"], ensure_ascii=False)))
-    return jsonify(ok=True, migrated=len(records)), 201
 
 
 @app.get("/api/me")

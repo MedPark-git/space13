@@ -15,7 +15,7 @@ ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 app = Flask(__name__, static_folder=None)
 app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024)
-MIGRATION_TOKEN_HASH = "c4840a84b34fb8a251ebf324131d803bc43bc8bd4637d41ec82b104682cf60d5"
+MIGRATION_TOKEN_HASH = "e8b243fc96410e7a20cdc63967c7224b93ca9d41bc3040425684c8fcacfdbc23"
 
 
 def database_url():
